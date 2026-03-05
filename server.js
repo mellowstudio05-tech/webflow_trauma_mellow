@@ -84,6 +84,8 @@ app.get('/api/scrape', async (req, res) => {
             return iso;
           };
 
+          const eventDatum = formatDateForWebflow(event);
+
           let imageFieldValue = '';
           if (event.imageUrl) {
             const fullImageUrl = formatImageUrl(event.imageUrl);
@@ -100,25 +102,26 @@ app.get('/api/scrape', async (req, res) => {
             }
           }
 
+          const slugBase = eventName.toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+          const slug = eventDatum ? `${slugBase}-${event.date?.replace(/\./g, '-')}` : slugBase;
+
           const webflowData = {
-            name: eventName,                                        // Blog Header = name Field
-            slug: eventName.toLowerCase()
-              .replace(/[^a-z0-9\s-]/g, '')                       // Entferne Sonderzeichen
-              .replace(/\s+/g, '-')                               // Ersetze Leerzeichen mit -
-              .replace(/-+/g, '-')                                // Entferne mehrfache -
-              .replace(/^-|-$/g, ''),                             // Entferne führende/trailing -
-            'uhrzeit': event.time,                                // Zeit
-            'event-datum': formatDateForWebflow(event),           // Korrekt formatiertes Datum
-            'preis': event.price || 'Eintritt frei',              // Preis
-            'eintritt-frei': (event.price || '').toLowerCase().includes('frei'), // Switch
-            'blog-rich-text': event.description || `${eventName}\n\nDatum: ${event.date}\nZeit: ${event.time}\nOrt: ${event.location}\nKategorie: ${event.category}`, // Beschreibung
-            'imageurl': imageFieldValue,                           // Image-Objekt { fileId, url, alt } oder URL-String
+            name: eventName,
+            slug: slug,
+            'uhrzeit': event.time,
+            'event-datum': eventDatum,
+            'preis': event.price || 'Eintritt frei',
+            'eintritt-frei': (event.price || '').toLowerCase().includes('frei'),
+            'blog-rich-text': event.description || `${eventName}\n\nDatum: ${event.date}\nZeit: ${event.time}\nOrt: ${event.location}\nKategorie: ${event.category}`,
+            'imageurl': imageFieldValue,
           };
           if (categorySlug) webflowData[categorySlug] = event.category || '';
 
-          const existingItem = await webflow.findItemByName(
+          const existingItem = await webflow.findItemByNameAndDate(
             process.env.WEBFLOW_COLLECTION_ID,
-            eventName
+            eventName,
+            eventDatum
           );
 
           let result;
@@ -243,6 +246,8 @@ app.post('/api/scrape', async (req, res) => {
             return iso;
           };
 
+          const eventDatum = formatDateForWebflow(event);
+
           let imageFieldValue = '';
           if (event.imageUrl) {
             const fullImageUrl = formatImageUrl(event.imageUrl);
@@ -259,25 +264,26 @@ app.post('/api/scrape', async (req, res) => {
             }
           }
 
+          const slugBase = eventName.toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+          const slug = eventDatum ? `${slugBase}-${event.date?.replace(/\./g, '-')}` : slugBase;
+
           const webflowData = {
-            name: eventName,                                        // Blog Header = name Field
-            slug: eventName.toLowerCase()
-              .replace(/[^a-z0-9\s-]/g, '')                       // Entferne Sonderzeichen
-              .replace(/\s+/g, '-')                               // Ersetze Leerzeichen mit -
-              .replace(/-+/g, '-')                                // Entferne mehrfache -
-              .replace(/^-|-$/g, ''),                             // Entferne führende/trailing -
-            'uhrzeit': event.time,                                // Zeit
-            'event-datum': formatDateForWebflow(event),           // Korrekt formatiertes Datum
-            'preis': event.price || 'Eintritt frei',              // Preis
-            'eintritt-frei': (event.price || '').toLowerCase().includes('frei'), // Switch
-            'blog-rich-text': event.description || `${eventName}\n\nDatum: ${event.date}\nZeit: ${event.time}\nOrt: ${event.location}\nKategorie: ${event.category}`, // Beschreibung
-            'imageurl': imageFieldValue,                           // Image-Objekt { fileId, url, alt } oder URL-String
+            name: eventName,
+            slug: slug,
+            'uhrzeit': event.time,
+            'event-datum': eventDatum,
+            'preis': event.price || 'Eintritt frei',
+            'eintritt-frei': (event.price || '').toLowerCase().includes('frei'),
+            'blog-rich-text': event.description || `${eventName}\n\nDatum: ${event.date}\nZeit: ${event.time}\nOrt: ${event.location}\nKategorie: ${event.category}`,
+            'imageurl': imageFieldValue,
           };
           if (categorySlug) webflowData[categorySlug] = event.category || '';
 
-          const existingItem = await webflow.findItemByName(
+          const existingItem = await webflow.findItemByNameAndDate(
             process.env.WEBFLOW_COLLECTION_ID,
-            eventName
+            eventName,
+            eventDatum
           );
 
           let result;
