@@ -1,4 +1,6 @@
 const axios = require('axios');
+const crypto = require('crypto');
+const FormData = require('form-data');
 
 /**
  * Webflow API Client
@@ -224,34 +226,48 @@ class WebflowAPI {
       return null;
     }
   }
+  /**
+   * Upload image to Webflow (v2: Create Asset Metadata → upload to S3).
+   * Requires WEBFLOW_SITE_ID. Returns { id, url } for use in Image field.
+   */
   async uploadImage(imageUrl, filename) {
+    if (!this.siteId) {
+      throw new Error('WEBFLOW_SITE_ID is required for image upload');
+    }
     try {
-      // Lade das Bild herunter
-      const response = await axios.get(imageUrl, {
+      const res = await axios.get(imageUrl, {
         responseType: 'arraybuffer',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
       });
-      
-      // Konvertiere zu Base64
-      const base64 = Buffer.from(response.data).toString('base64');
-      const mimeType = response.headers['content-type'] || 'image/jpeg';
-      
-      // Upload zu Webflow
-      const uploadResponse = await axios.post(
-        `${this.baseURL}/assets`,
-        {
-          fileName: filename,
-          fileData: base64,
-          mimeType: mimeType
-        },
+      const buffer = Buffer.from(res.data);
+      const fileHash = crypto.createHash('md5').update(buffer).digest('hex');
+      const fileName = filename || imageUrl.split('/').pop().split('?')[0] || 'image.jpg';
+
+      const meta = await axios.post(
+        `${this.baseURL}/sites/${this.siteId}/assets`,
+        { fileName, fileHash },
         { headers: this.headers }
       );
-      
-      console.log('Image uploaded to Webflow:', uploadResponse.data);
-      return uploadResponse.data.id;
-      
+      const { id, uploadUrl, uploadDetails, hostedUrl, assetUrl } = meta.data;
+
+      const form = new FormData();
+      if (uploadDetails && typeof uploadDetails === 'object') {
+        for (const [key, value] of Object.entries(uploadDetails)) {
+          if (value != null) form.append(key, value);
+        }
+      }
+      form.append('file', buffer, { filename: fileName });
+
+      const uploadTarget = uploadUrl || 'https://webflow-prod-assets.s3.amazonaws.com/';
+      await axios.post(uploadTarget, form, {
+        headers: form.getHeaders(),
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity
+      });
+
+      const url = hostedUrl || assetUrl || '';
+      console.log('Image uploaded to Webflow:', id);
+      return { id, url };
     } catch (error) {
       console.error('Error uploading image to Webflow:', error.response?.data || error.message);
       throw error;
