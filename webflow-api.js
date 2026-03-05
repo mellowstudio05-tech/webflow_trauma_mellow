@@ -226,6 +226,43 @@ class WebflowAPI {
       return null;
     }
   }
+
+  /**
+   * Find existing item by name and date (für Events mit gleichem Namen, unterschiedlichem Termin)
+   * @param {string} collectionId - Webflow collection ID
+   * @param {string} name - Event-Name
+   * @param {string} dateIso - Datum im ISO-Format (z.B. 2026-03-07T22:00:00.000Z), nur YYYY-MM-DD wird verglichen
+   * @param {string} dateFieldSlug - Slug des Datum-Felds (default: 'event-datum')
+   * @returns {Promise<Object|null>}
+   */
+  async findItemByNameAndDate(collectionId, name, dateIso, dateFieldSlug = 'event-datum') {
+    if (!dateIso || dateIso.length < 10) return this.findItemByName(collectionId, name);
+    const datePart = dateIso.slice(0, 10);
+    try {
+      let offset = 0;
+      const limit = 100;
+      while (true) {
+        const result = await this.getItems(collectionId, { limit, offset });
+        const items = result.items || [];
+        const found = items.find((item) => {
+          const nameMatch = item.fieldData?.name === name || item.fieldData?.name?.trim() === name?.trim();
+          if (!nameMatch) return false;
+          const itemDate = item.fieldData?.[dateFieldSlug];
+          if (!itemDate) return true;
+          const itemDatePart = String(itemDate).slice(0, 10);
+          return itemDatePart === datePart;
+        });
+        if (found) return found;
+        if (items.length === 0 || (result.pagination && offset + limit >= result.pagination.total)) break;
+        offset += limit;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error finding item by name and date:', error.response?.data || error.message);
+      return this.findItemByName(collectionId, name);
+    }
+  }
+
   /**
    * Upload image to Webflow (v2: Create Asset Metadata → upload to S3).
    * Requires WEBFLOW_SITE_ID. Returns { id, url } for use in Image field.
