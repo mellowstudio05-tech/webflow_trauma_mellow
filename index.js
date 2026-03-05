@@ -79,27 +79,27 @@ async function main() {
           }
         }
 
-        // Transform event data to Webflow format - Blog Header ist das name Field
+        const eventDatum = formatDateForWebflow(event);
+        const slugBase = (event.title || event.eventName).toLowerCase()
+          .replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+        const slug = eventDatum ? `${slugBase}-${event.date?.replace(/\./g, '-')}` : slugBase;
+
         const webflowData = {
-          name: event.title || event.eventName,                    // Blog Header = name Field
-          slug: (event.title || event.eventName).toLowerCase()
-            .replace(/[^a-z0-9\s-]/g, '')                         // Entferne Sonderzeichen
-            .replace(/\s+/g, '-')                                 // Ersetze Leerzeichen mit -
-            .replace(/-+/g, '-')                                  // Entferne mehrfache -
-            .replace(/^-|-$/g, ''),                               // Entferne führende/trailing -
-          'uhrzeit': event.time,                                  // Zeit
-          'event-datum': formatDateForWebflow(event),             // Korrekt formatiertes Datum
-          'preis': event.price || 'Eintritt frei',                // Preis
-          'eintritt-frei': (event.price || '').toLowerCase().includes('frei'), // Switch
-          'blog-rich-text': event.description || `${event.eventName}\n\nDatum: ${event.date}\nZeit: ${event.time}\nOrt: ${event.location}\nKategorie: ${event.category}`, // Beschreibung
-          'imageurl': imageFieldValue,                            // Image-Objekt { fileId, url, alt } oder URL-String
+          name: event.title || event.eventName,
+          slug: slug,
+          'uhrzeit': event.time,
+          'event-datum': eventDatum,
+          'preis': event.price || 'Eintritt frei',
+          'eintritt-frei': (event.price || '').toLowerCase().includes('frei'),
+          'blog-rich-text': event.description || `${event.eventName}\n\nDatum: ${event.date}\nZeit: ${event.time}\nOrt: ${event.location}\nKategorie: ${event.category}`,
+          'imageurl': imageFieldValue,
         };
         if (categorySlug) webflowData[categorySlug] = event.category || '';
 
-        // Prüfe ob Event bereits existiert
-        const existingItem = await webflow.findItemByName(
+        const existingItem = await webflow.findItemByNameAndDate(
           process.env.WEBFLOW_COLLECTION_ID,
-          eventName
+          eventName,
+          eventDatum
         );
 
         let result;
