@@ -49,11 +49,17 @@ app.get('/api/scrape', async (req, res) => {
       return `https://www.hessen-szene.de/${imageUrl}`;
     };
 
-    // Scrape content from the URL
     const scrapedData = await scrapeContent();
     console.log(`Found ${scrapedData.events.length} events`);
 
-    // Upload each event to Webflow
+    const collectionId = process.env.WEBFLOW_COLLECTION_ID;
+    const schema = await webflow.getCollectionSchema(collectionId);
+    const categoryField = (schema.fields || []).find(
+      (f) => (f.slug || '').toLowerCase().includes('kategorie') || (f.name || '').toLowerCase().includes('kategorie')
+    );
+    const categorySlug = categoryField?.slug;
+    if (categorySlug) console.log('Kategorie-Feld gefunden:', categorySlug);
+
     const uploadedEvents = [];
     
     for (const event of scrapedData.events) {
@@ -144,8 +150,8 @@ app.get('/api/scrape', async (req, res) => {
             'eintritt-frei': (event.price || '').toLowerCase().includes('frei'), // Switch
             'blog-rich-text': event.description || `${eventName}\n\nDatum: ${event.date}\nZeit: ${event.time}\nOrt: ${event.location}\nKategorie: ${event.category}`, // Beschreibung
             'imageurl': imageFieldValue,                           // Image-Objekt { fileId, url, alt } oder URL-String
-            't-kategorie': event.category || '',                  // Kategorie (Plain text)
           };
+          if (categorySlug) webflowData[categorySlug] = event.category || '';
 
           const existingItem = await webflow.findItemByName(
             process.env.WEBFLOW_COLLECTION_ID,
@@ -243,7 +249,14 @@ app.post('/api/scrape', async (req, res) => {
     const scrapedData = await scrapeContent();
     console.log(`Found ${scrapedData.events.length} events`);
 
-    // Upload each event to Webflow
+    const collectionId = process.env.WEBFLOW_COLLECTION_ID;
+    const schema = await webflow.getCollectionSchema(collectionId);
+    const categoryField = (schema.fields || []).find(
+      (f) => (f.slug || '').toLowerCase().includes('kategorie') || (f.name || '').toLowerCase().includes('kategorie')
+    );
+    const categorySlug = categoryField?.slug;
+    if (categorySlug) console.log('Kategorie-Feld gefunden:', categorySlug);
+
     const uploadedEvents = [];
     
     for (const event of scrapedData.events) {
@@ -252,9 +265,7 @@ app.post('/api/scrape', async (req, res) => {
         
         console.log(`Creating event: ${eventName}...`);
         
-        // Datum für Webflow Date Field formatieren
-          const formatDateForWebflow = (event) => {
-            // Versuche das Datum aus der Detailseite zu parsen
+        const formatDateForWebflow = (event) => {
             if (event.fullDateTime) {
               // Entferne Zeilenumbrüche und extrahiere Datum
               const cleanDate = event.fullDateTime.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
@@ -334,8 +345,8 @@ app.post('/api/scrape', async (req, res) => {
             'eintritt-frei': (event.price || '').toLowerCase().includes('frei'), // Switch
             'blog-rich-text': event.description || `${eventName}\n\nDatum: ${event.date}\nZeit: ${event.time}\nOrt: ${event.location}\nKategorie: ${event.category}`, // Beschreibung
             'imageurl': imageFieldValue,                           // Image-Objekt { fileId, url, alt } oder URL-String
-            't-kategorie': event.category || '',                  // Kategorie (Plain text)
           };
+          if (categorySlug) webflowData[categorySlug] = event.category || '';
 
           const existingItem = await webflow.findItemByName(
             process.env.WEBFLOW_COLLECTION_ID,
