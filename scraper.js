@@ -39,28 +39,36 @@ async function scrapeEvents(url) {
     eventTable.each((i, row) => {
       try {
         const $row = $(row);
-        
-        // Datum extrahieren
-        const dateText = $row.find('td').eq(0).text().trim();
-        const dateMatch = dateText.match(/(\d{2}\.\d{2}\.\d{2})/);
-        const date = dateMatch ? dateMatch[1] : '';
-        const dayOfWeek = $row.find('td').eq(0).find('br').next().text().trim();
-        
+        const $cell0 = $row.find('td').eq(0);
+
+        // Datum: zuerst aus <time datetime="YYYY-MM-DD">, sonst angezeigtes DD.MM.YY
+        const timeEl = $cell0.find('time');
+        const datetimeAttr = timeEl.attr('datetime');
+        let date = '';
+        if (datetimeAttr) {
+          const m = datetimeAttr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+          date = m ? `${m[3]}.${m[2]}.${m[1].slice(2)}` : ''; // 2025-09-30 -> 30.09.25
+        }
+        if (!date) {
+          const dateText = $cell0.text();
+          const dateMatch = dateText.match(/(\d{2}\.\d{2}\.\d{2})/);
+          date = dateMatch ? dateMatch[1] : '';
+        }
+        const dayOfWeek = ($cell0.find('span').first().text().trim() || $cell0.find('br').next().text().trim()).replace(/,\s*$/, '');
+
         // Beginn extrahieren
         const time = $row.find('td').eq(1).text().trim();
-        
-        // Veranstaltung extrahieren
+
+        // Veranstaltung: Name + Link (z.B. /details/widersetzen-soli-party)
         const $eventLink = $row.find('td').eq(2).find('a');
         const eventName = $eventLink.text().trim();
         const eventLink = $eventLink.attr('href');
-        const eventId = eventLink ? eventLink.match(/eventDate%5D=(\d+)/)?.[1] : '';
-        
-        // Detailseite URL erstellen
+        const eventId = eventLink ? (eventLink.match(/eventDate%5D=(\d+)/)?.[1] || eventLink.replace(/^\/details\//, '').replace(/\/$/, '')) : '';
         const detailUrl = eventLink ? new URL(eventLink, 'https://www.hessen-szene.de').href : '';
-        
-        // Ort extrahieren
+
+        // Ort extrahieren (mehrfache Leerzeichen normalisieren)
         const location = $row.find('td').eq(3).text().trim().replace(/\s+/g, ' ');
-        
+
         // Kategorie extrahieren
         const category = $row.find('td').eq(4).text().trim();
         
@@ -160,9 +168,13 @@ async function scrapeEventDetails(detailUrl) {
       // Ort mit vollständiger Adresse
       fullLocation: $('.event-single-view-contact .col:last-child p').html(),
       
-      // Event-Bild
-      imageUrl: $('.single-event-image img').attr('src'),
-      imageAlt: $('.single-event-image img').attr('alt'),
+      // Event-Bild: <img class="figure-img img-fluid" itemprop="image" src="/fileadmin/..." alt="">
+      imageUrl: $('img[itemprop="image"]').attr('src')
+        || $('.event-detail-images img').attr('src')
+        || $('.single-event-image img').attr('src'),
+      imageAlt: $('img[itemprop="image"]').attr('alt')
+        || $('.event-detail-images img').attr('alt')
+        || $('.single-event-image img').attr('alt'),
       
       // Beschreibung (für Blog Rich Text)
       description: $('.event-single-view-desc').text().trim(),
@@ -188,8 +200,8 @@ async function scrapeEventDetails(detailUrl) {
  */
 async function scrapeContent() {
   try {
-    // Die URL von hessen-szene.de (mit den richtigen Filtern)
-    const url = 'https://www.hessen-szene.de/?tx_laks_calendar%5B__referrer%5D%5B%40extension%5D=Laks&tx_laks_calendar%5B__referrer%5D%5B%40controller%5D=EventDate&tx_laks_calendar%5B__referrer%5D%5B%40action%5D=list&tx_laks_calendar%5B__referrer%5D%5Barguments%5D=YToyOntzOjk6IkB3aWRnZXRfMCI7YToxOntzOjExOiJjdXJyZW50UGFnZSI7czoyOiI1MCI7fXM6OToiZXZlbnREYXRlIjtzOjU6IjczNTAwIjt9f2dfbc385cf5cc95e31f97150e4f00dfb907a501&tx_laks_calendar%5B__referrer%5D%5B%40request%5D=%7B%22%40extension%22%3A%22Laks%22%2C%22%40controller%22%3A%22EventDate%22%2C%22%40action%22%3A%22list%22%7D61a2206ff6f4bfc645019a2691b89e0f194538f7&tx_laks_calendar%5B__trustedProperties%5D=%7B%22eventFilter%22%3A%7B%22searchString%22%3A1%2C%22searchStringTitle%22%3A1%2C%22center%22%3A1%2C%22region%22%3A1%2C%22category%22%3A1%2C%22startDate%22%3A1%2C%22endDate%22%3A1%7D%2C%22showEventButton%22%3A1%7D3397c9ad06eb4637d9899c06cfaa1524f9df8b90&tx_laks_calendar%5BeventFilter%5D%5BsearchString%5D=&tx_laks_calendar%5BeventFilter%5D%5BsearchStringTitle%5D=&tx_laks_calendar%5BeventFilter%5D%5Bcenter%5D=8&tx_laks_calendar%5BeventFilter%5D%5Bregion%5D=&tx_laks_calendar%5BeventFilter%5D%5Bcategory%5D=&tx_laks_calendar%5BeventFilter%5D%5BstartDate%5D=&tx_laks_calendar%5BeventFilter%5D%5BendDate%5D=&tx_laks_calendar%5BshowEventButton%5D=';
+    // Homepage hessen-szene.de – Veranstaltungen (Center 8 = trauma im g-werk)
+    const url = 'https://www.hessen-szene.de/?tx_laks_calendar%5B__referrer%5D%5B%40extension%5D=Laks&tx_laks_calendar%5B__referrer%5D%5B%40controller%5D=EventDate&tx_laks_calendar%5B__referrer%5D%5B%40action%5D=list&tx_laks_calendar%5B__referrer%5D%5Barguments%5D=YTowOnt9594061197d8315d8b9ffe68a0945ddd6cd835c50&tx_laks_calendar%5B__referrer%5D%5B%40request%5D=%7B%22%40extension%22%3A%22Laks%22%2C%22%40controller%22%3A%22EventDate%22%2C%22%40action%22%3A%22list%22%7D61a2206ff6f4bfc645019a2691b89e0f194538f7&tx_laks_calendar%5B__trustedProperties%5D=%7B%22eventFilter%22%3A%7B%22searchString%22%3A1%2C%22searchStringTitle%22%3A1%2C%22center%22%3A1%2C%22region%22%3A1%2C%22category%22%3A1%2C%22startDate%22%3A1%2C%22endDate%22%3A1%7D%2C%22showEventButton%22%3A1%7D3397c9ad06eb4637d9899c06cfaa1524f9df8b90&tx_laks_calendar%5BeventFilter%5D%5BsearchString%5D=&tx_laks_calendar%5BeventFilter%5D%5BsearchStringTitle%5D=&tx_laks_calendar%5BeventFilter%5D%5Bcenter%5D=8&tx_laks_calendar%5BeventFilter%5D%5Bregion%5D=&tx_laks_calendar%5BeventFilter%5D%5Bcategory%5D=&tx_laks_calendar%5BeventFilter%5D%5BstartDate%5D=&tx_laks_calendar%5BeventFilter%5D%5BendDate%5D=&tx_laks_calendar%5BshowEventButton%5D=';
     
     console.log('Starting scrape process...');
     console.log('URL:', url);
@@ -209,14 +221,15 @@ async function scrapeContent() {
           console.log(`Scraping details for event ${i + 1}/${events.length}: ${event.eventName}`);
           
           try {
-            // Prüfe ob detailUrl existiert
-            if (!event.detailUrl) {
+            // Prüfe ob detailUrl existiert (kann auch eventLink heißen)
+            const detailUrl = event.detailUrl || event.eventLink;
+            if (!detailUrl) {
               console.log(`⚠️ No detailUrl for ${event.eventName}, skipping details`);
               eventsWithDetails.push(event);
               continue;
             }
             
-            const details = await scrapeEventDetails(event.detailUrl);
+            const details = await scrapeEventDetails(detailUrl);
             eventsWithDetails.push({
               ...event,
               ...details
