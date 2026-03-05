@@ -125,7 +125,7 @@ async function main() {
           'eintritt-frei': (event.price || '').toLowerCase().includes('frei'), // Switch
           'blog-rich-text': event.description || `${event.eventName}\n\nDatum: ${event.date}\nZeit: ${event.time}\nOrt: ${event.location}\nKategorie: ${event.category}`, // Beschreibung
           'imageurl': imageFieldValue,                            // Image-Objekt { fileId, url, alt } oder URL-String
-          't-kategorie': event.category || '',                    // Kategorie aus Detailseite oder Tabelle
+          't-kategorie': event.category || '',                    // Kategorie (Plain text)
         };
 
         // Prüfe ob Event bereits existiert
