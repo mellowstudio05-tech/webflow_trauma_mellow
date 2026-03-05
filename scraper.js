@@ -41,18 +41,17 @@ async function scrapeEvents(url) {
         const $row = $(row);
         const $cell0 = $row.find('td').eq(0);
 
-        // Datum: zuerst aus <time datetime="YYYY-MM-DD">, sonst angezeigtes DD.MM.YY
-        const timeEl = $cell0.find('time');
-        const datetimeAttr = timeEl.attr('datetime');
-        let date = '';
-        if (datetimeAttr) {
-          const m = datetimeAttr.match(/^(\d{4})-(\d{2})-(\d{2})/);
-          date = m ? `${m[3]}.${m[2]}.${m[1].slice(2)}` : ''; // 2025-09-30 -> 30.09.25
-        }
+        // Datum: sichtbares DD.MM.YY hat Priorität (stimmt), datetime-Attribut ist oft falsch
+        const dateText = $cell0.text();
+        const dateMatch = dateText.match(/(\d{2}\.\d{2}\.\d{2})/);
+        let date = dateMatch ? dateMatch[1] : '';
         if (!date) {
-          const dateText = $cell0.text();
-          const dateMatch = dateText.match(/(\d{2}\.\d{2}\.\d{2})/);
-          date = dateMatch ? dateMatch[1] : '';
+          const timeEl = $cell0.find('time');
+          const datetimeAttr = timeEl.attr('datetime');
+          if (datetimeAttr) {
+            const m = datetimeAttr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            date = m ? `${m[3]}.${m[2]}.${m[1].slice(2)}` : '';
+          }
         }
         const dayOfWeek = ($cell0.find('span').first().text().trim() || $cell0.find('br').next().text().trim()).replace(/,\s*$/, '');
 
@@ -232,7 +231,9 @@ async function scrapeContent() {
             const details = await scrapeEventDetails(detailUrl);
             eventsWithDetails.push({
               ...event,
-              ...details
+              ...details,
+              date: event.date,
+              time: event.time || details.startTime
             });
             
             // Delay to avoid rate limits
