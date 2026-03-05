@@ -24,7 +24,14 @@ async function main() {
 
     console.log(`Found ${scrapedData.events.length} events`);
 
-    // Upload each event to Webflow
+    const collectionId = process.env.WEBFLOW_COLLECTION_ID;
+    const schema = await webflow.getCollectionSchema(collectionId);
+    const categoryField = (schema.fields || []).find(
+      (f) => (f.slug || '').toLowerCase().includes('kategorie') || (f.name || '').toLowerCase().includes('kategorie')
+    );
+    const categorySlug = categoryField?.slug;
+    if (categorySlug) console.log('Kategorie-Feld gefunden:', categorySlug);
+
     const uploadedEvents = [];
     
     for (const event of scrapedData.events) {
@@ -125,8 +132,8 @@ async function main() {
           'eintritt-frei': (event.price || '').toLowerCase().includes('frei'), // Switch
           'blog-rich-text': event.description || `${event.eventName}\n\nDatum: ${event.date}\nZeit: ${event.time}\nOrt: ${event.location}\nKategorie: ${event.category}`, // Beschreibung
           'imageurl': imageFieldValue,                            // Image-Objekt { fileId, url, alt } oder URL-String
-          't-kategorie': event.category || '',                    // Kategorie (Plain text)
         };
+        if (categorySlug) webflowData[categorySlug] = event.category || '';
 
         // Prüfe ob Event bereits existiert
         const existingItem = await webflow.findItemByName(
