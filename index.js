@@ -42,29 +42,16 @@ async function main() {
         
         // Datum für Webflow Date Field formatieren
         const formatDateForWebflow = (event) => {
-          if (event.date) {
-            const parts = event.date.split('.');
-            if (parts.length === 3) {
-              const day = parts[0];
-              const month = parts[1];
-              const year = '20' + parts[2];
-              const timeMatch = (event.time || event.fullDateTime || '').match(/(\d{1,2}):(\d{2})/);
-              const hour = timeMatch ? timeMatch[1].padStart(2, '0') : '00';
-              const minute = timeMatch ? timeMatch[2] : '00';
-              return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hour}:${minute}:00.000Z`;
-            }
-          }
-          if (event.fullDateTime) {
-            const cleanDate = event.fullDateTime.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
-            const dateStr = cleanDate.match(/(\d{1,2})\.\s*(\w+)\s*(\d{4})/);
-            const timeStr = cleanDate.match(/(\d{1,2}):(\d{2})/);
-            if (dateStr && timeStr) {
-              const monthMap = { 'Januar': '01', 'Februar': '02', 'März': '03', 'April': '04', 'Mai': '05', 'Juni': '06', 'Juli': '07', 'August': '08', 'September': '09', 'Oktober': '10', 'November': '11', 'Dezember': '12' };
-              const monthNum = monthMap[dateStr[2]];
-              if (monthNum) return `${dateStr[3]}-${monthNum}-${dateStr[1].padStart(2, '0')}T${timeStr[1].padStart(2, '0')}:${timeStr[2]}:00.000Z`;
-            }
-          }
-          return null;
+          if (!event.date) return null;
+          const parts = event.date.split('.');
+          if (parts.length !== 3) return null;
+          const day = parts[0];
+          const month = parts[1];
+          const year = '20' + parts[2];
+          const timeMatch = (event.time || '').match(/(\d{1,2}):(\d{2})/);
+          const hour = timeMatch ? timeMatch[1].padStart(2, '0') : '00';
+          const minute = timeMatch ? timeMatch[2] : '00';
+          return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hour}:${minute}:00.000Z`;
         };
 
         // Konvertiere relative Bild-URL zu vollständiger URL
