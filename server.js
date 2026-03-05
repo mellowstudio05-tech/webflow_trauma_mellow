@@ -42,24 +42,13 @@ app.get('/api/scrape', async (req, res) => {
       apiTokenStart: process.env.WEBFLOW_API_TOKEN?.substring(0, 5) + '...'
     });
     
-    // Konvertiere relative Bild-URL zu vollständiger URL (globale Funktion)
     const formatImageUrl = (imageUrl) => {
       if (!imageUrl) return '';
-      
-      // Wenn es bereits eine vollständige URL ist
-      if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-        return imageUrl;
-      }
-      
-      // Wenn es ein relativer Pfad ist, füge die Domain hinzu
-      if (imageUrl.startsWith('/')) {
-        return `https://www.hessen-szene.de${imageUrl}`;
-      }
-      
-      // Falls es ein anderer Pfad ist
+      if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) return imageUrl;
+      if (imageUrl.startsWith('/')) return `https://www.hessen-szene.de${imageUrl}`;
       return `https://www.hessen-szene.de/${imageUrl}`;
     };
-    
+
     // Scrape content from the URL
     const scrapedData = await scrapeContent();
     console.log(`Found ${scrapedData.events.length} events`);
@@ -126,8 +115,22 @@ app.get('/api/scrape', async (req, res) => {
             return null;
           };
 
+          let imageFieldValue = '';
+          if (event.imageUrl) {
+            const fullImageUrl = formatImageUrl(event.imageUrl);
+            const imageFilename = (event.title || event.eventName || 'event')
+              .toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+              + (event.imageUrl.match(/\.(jpg|jpeg|png|gif|webp)/i)?.[0] || '.jpg');
+            try {
+              const uploaded = await webflow.uploadImage(fullImageUrl, imageFilename);
+              imageFieldValue = { fileId: uploaded.id, url: uploaded.url || fullImageUrl, alt: event.imageAlt || event.eventName || '' };
+              console.log(`  Bild hochgeladen: ${eventName}`);
+            } catch (imgErr) {
+              console.warn(`  Bild-Upload übersprungen (${eventName}):`, imgErr.message);
+              imageFieldValue = fullImageUrl;
+            }
+          }
 
-          // Transform event data to Webflow format - Blog Header ist das name Field
           const webflowData = {
             name: eventName,                                        // Blog Header = name Field
             slug: eventName.toLowerCase()
@@ -140,15 +143,10 @@ app.get('/api/scrape', async (req, res) => {
             'preis': event.price || 'Eintritt frei',              // Preis
             'eintritt-frei': (event.price || '').toLowerCase().includes('frei'), // Switch
             'blog-rich-text': event.description || `${eventName}\n\nDatum: ${event.date}\nZeit: ${event.time}\nOrt: ${event.location}\nKategorie: ${event.category}`, // Beschreibung
-            'imageurl': formatImageUrl(event.imageUrl),           // Vollständige Event-Bild URL
+            'imageurl': imageFieldValue,                           // Image-Objekt { fileId, url, alt } oder URL-String
+            't-kategorie': event.category || '',                  // Kategorie aus Detailseite oder Tabelle
           };
-          
-          // TODO: Füge Kategorie und Tag hinzu, sobald die exakten Feldnamen aus Webflow bekannt sind
-          // Die Felder müssen in Webflow CMS existieren und die Feldnamen müssen exakt übereinstimmen
-          // Prüfe in Webflow: Site Settings → Collections → Deine Collection → Fields
-          // Beispiel: Falls das Feld "Kategorie Plain Text" heißt, verwende: webflowData['kategorie-plain-text'] = event.category;
 
-          // Prüfe ob Event bereits existiert
           const existingItem = await webflow.findItemByName(
             process.env.WEBFLOW_COLLECTION_ID,
             eventName
@@ -158,7 +156,6 @@ app.get('/api/scrape', async (req, res) => {
           let action;
 
           if (existingItem) {
-            // Event existiert bereits - aktualisiere es
             console.log(`Updating existing event: ${eventName}...`);
             result = await webflow.updateItem(
               process.env.WEBFLOW_COLLECTION_ID,
@@ -235,8 +232,14 @@ app.get('/api/scrape', async (req, res) => {
 app.post('/api/scrape', async (req, res) => {
   try {
     console.log('Manual scrape triggered...');
-    
-    // Scrape content from the URL
+
+    const formatImageUrl = (imageUrl) => {
+      if (!imageUrl) return '';
+      if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) return imageUrl;
+      if (imageUrl.startsWith('/')) return `https://www.hessen-szene.de${imageUrl}`;
+      return `https://www.hessen-szene.de/${imageUrl}`;
+    };
+
     const scrapedData = await scrapeContent();
     console.log(`Found ${scrapedData.events.length} events`);
 
@@ -302,8 +305,22 @@ app.post('/api/scrape', async (req, res) => {
             return null;
           };
 
+          let imageFieldValue = '';
+          if (event.imageUrl) {
+            const fullImageUrl = formatImageUrl(event.imageUrl);
+            const imageFilename = (event.title || event.eventName || 'event')
+              .toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+              + (event.imageUrl.match(/\.(jpg|jpeg|png|gif|webp)/i)?.[0] || '.jpg');
+            try {
+              const uploaded = await webflow.uploadImage(fullImageUrl, imageFilename);
+              imageFieldValue = { fileId: uploaded.id, url: uploaded.url || fullImageUrl, alt: event.imageAlt || event.eventName || '' };
+              console.log(`  Bild hochgeladen: ${eventName}`);
+            } catch (imgErr) {
+              console.warn(`  Bild-Upload übersprungen (${eventName}):`, imgErr.message);
+              imageFieldValue = fullImageUrl;
+            }
+          }
 
-          // Transform event data to Webflow format - Blog Header ist das name Field
           const webflowData = {
             name: eventName,                                        // Blog Header = name Field
             slug: eventName.toLowerCase()
@@ -316,15 +333,10 @@ app.post('/api/scrape', async (req, res) => {
             'preis': event.price || 'Eintritt frei',              // Preis
             'eintritt-frei': (event.price || '').toLowerCase().includes('frei'), // Switch
             'blog-rich-text': event.description || `${eventName}\n\nDatum: ${event.date}\nZeit: ${event.time}\nOrt: ${event.location}\nKategorie: ${event.category}`, // Beschreibung
-            'imageurl': formatImageUrl(event.imageUrl),           // Vollständige Event-Bild URL
+            'imageurl': imageFieldValue,                           // Image-Objekt { fileId, url, alt } oder URL-String
+            't-kategorie': event.category || '',                  // Kategorie aus Detailseite oder Tabelle
           };
-          
-          // TODO: Füge Kategorie und Tag hinzu, sobald die exakten Feldnamen aus Webflow bekannt sind
-          // Die Felder müssen in Webflow CMS existieren und die Feldnamen müssen exakt übereinstimmen
-          // Prüfe in Webflow: Site Settings → Collections → Deine Collection → Fields
-          // Beispiel: Falls das Feld "Kategorie Plain Text" heißt, verwende: webflowData['kategorie-plain-text'] = event.category;
 
-          // Prüfe ob Event bereits existiert
           const existingItem = await webflow.findItemByName(
             process.env.WEBFLOW_COLLECTION_ID,
             eventName
@@ -334,7 +346,6 @@ app.post('/api/scrape', async (req, res) => {
           let action;
 
           if (existingItem) {
-            // Event existiert bereits - aktualisiere es
             console.log(`Updating existing event: ${eventName}...`);
             result = await webflow.updateItem(
               process.env.WEBFLOW_COLLECTION_ID,
