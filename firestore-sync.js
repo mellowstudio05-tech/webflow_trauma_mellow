@@ -152,10 +152,11 @@ function eventToDoc(event, extras = {}) {
 }
 
 /**
- * Alle gescrapten Events in eine Firestore-Collection schreiben (merge).
+ * Alle gescrapten Events in Firestore: gleiche Doc-ID (Name + Datum) = bestehendes Dokument wird aktualisiert.
+ * Technisch: docRef.get() prüft Existenz; set(..., { merge: true }) legt an oder merged Felder.
  * @param {Array} events - scrapedData.events
  * @param {Array<{eventName:string, date?:string, webflowId?:string, action?:string, slug?:string}>} uploadedList
- * @returns {Promise<{enabled:boolean, collection?:string, written?:number, errors?:Array, message?:string}>}
+ * @returns {Promise<{enabled:boolean, collection?:string, written?:number, created?:number, updated?:number, errors?:Array, message?:string}>}
  */
 async function syncScrapedEventsToFirestore(events, uploadedList = []) {
   if (!isFirestoreEnabled()) {
@@ -178,6 +179,8 @@ async function syncScrapedEventsToFirestore(events, uploadedList = []) {
   const collectionName = process.env.FIRESTORE_COLLECTION || 'cms';
   const db = admin.firestore();
   let written = 0;
+  let created = 0;
+  let updated = 0;
   const errors = [];
 
   for (const event of events) {
@@ -186,8 +189,12 @@ async function syncScrapedEventsToFirestore(events, uploadedList = []) {
       (u) => u.eventName === name && (u.date || '') === (event.date || '')
     );
     const docId = makeDocId(event);
+    const docRef = db.collection(collectionName).doc(docId);
     try {
-      await db.collection(collectionName).doc(docId).set(
+      const snap = await docRef.get();
+      const alreadyExists = snap.exists;
+
+      await docRef.set(
         eventToDoc(event, {
           webflowId: match?.webflowId,
           webflowAction: match?.action,
@@ -195,7 +202,13 @@ async function syncScrapedEventsToFirestore(events, uploadedList = []) {
         }),
         { merge: true }
       );
+
       written++;
+      if (alreadyExists) {
+        updated++;
+      } else {
+        created++;
+      }
     } catch (e) {
       errors.push({ docId, error: e.message });
     }
@@ -205,6 +218,8 @@ async function syncScrapedEventsToFirestore(events, uploadedList = []) {
     enabled: true,
     collection: collectionName,
     written,
+    created,
+    updated,
     errors: errors.length ? errors : undefined
   };
 }
