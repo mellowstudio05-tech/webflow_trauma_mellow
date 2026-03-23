@@ -1,0 +1,171 @@
+/**
+ * Optional: Scraped Events in Firebase Firestore schreiben.
+ * Aktiv mit FIREBASE_SERVICE_ACCOUNT_JSON oder FIREBASE_SERVICE_ACCOUNT_PATH (lokal).
+ */
+const admin = require('firebase-admin');
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+
+let initialized = false;
+
+function parseServiceAccount() {
+  const filePath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH?.trim();
+  if (filePath) {
+    try {
+      const abs = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
+      const raw = fs.readFileSync(abs, 'utf8');
+      const account = JSON.parse(raw);
+      if (account.private_key && typeof account.private_key === 'string') {
+        account.private_key = account.private_key.replace(/\\n/g, '\n');
+      }
+      return account;
+    } catch (e) {
+      console.error('FIREBASE_SERVICE_ACCOUNT_PATH konnte nicht gelesen werden:', e.message);
+      return null;
+    }
+  }
+
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (!raw || !raw.trim()) return null;
+  try {
+    const account = JSON.parse(raw.trim());
+    if (account.private_key && typeof account.private_key === 'string') {
+      account.private_key = account.private_key.replace(/\\n/g, '\n');
+    }
+    return account;
+  } catch (e) {
+    console.error('FIREBASE_SERVICE_ACCOUNT_JSON ist kein gültiges JSON:', e.message);
+    return null;
+  }
+}
+
+function initIfNeeded() {
+  if (initialized) return true;
+  const serviceAccount = parseServiceAccount();
+  if (!serviceAccount) return false;
+  try {
+    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+    initialized = true;
+    console.log('Firebase Admin initialisiert (Firestore).');
+    return true;
+  } catch (e) {
+    console.error('Firebase Admin Init fehlgeschlagen:', e.message);
+    return false;
+  }
+}
+
+function isFirestoreEnabled() {
+  return !!(
+    process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim() ||
+    process.env.FIREBASE_SERVICE_ACCOUNT_PATH?.trim()
+  );
+}
+
+function fullImageUrl(imageUrl) {
+  if (!imageUrl) return '';
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) return imageUrl;
+  if (imageUrl.startsWith('/')) return `https://www.hessen-szene.de${imageUrl}`;
+  return `https://www.hessen-szene.de/${imageUrl}`;
+}
+
+/**
+ * Eindeutige Doc-ID: Name + Tabellen-Datum (wie Webflow-Slug-Logik)
+ */
+function makeDocId(event) {
+  const base = (event.title || event.eventName || 'event')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 100);
+  const datePart = (event.date || 'nodate').replace(/\./g, '-');
+  let id = `${base}-${datePart}`;
+  if (id.length > 700) {
+    id = crypto.createHash('sha256').update(`${base}-${datePart}`).digest('hex').slice(0, 64);
+  }
+  return id;
+}
+
+function eventToDoc(event, extras = {}) {
+  return {
+    eventName: event.title || event.eventName,
+    dateTable: event.date || null,
+    time: event.time || null,
+    dayOfWeek: event.dayOfWeek || null,
+    location: event.location || null,
+    category: event.category || null,
+    detailUrl: event.eventLink || event.detailUrl || null,
+    description: event.description || null,
+    title: event.title || null,
+    fullDateTime: event.fullDateTime || null,
+    startTime: event.startTime || null,
+    price: event.price || null,
+    imageUrl: fullImageUrl(event.imageUrl),
+    imageAlt: event.imageAlt || null,
+    venue: event.venue || null,
+    webflowId: extras.webflowId || null,
+    webflowAction: extras.webflowAction || null,
+    slug: extras.slug || null,
+    scrapedAt: event.scrapedAt || null,
+    source: 'hessen-szene.de',
+    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+  };
+}
+
+/**
+ * Alle gescrapten Events in eine Firestore-Collection schreiben (merge).
+ * @param {Array} events - scrapedData.events
+ * @param {Array<{eventName:string, date?:string, webflowId?:string, action?:string, slug?:string}>} uploadedList
+ * @returns {Promise<{enabled:boolean, collection?:string, written?:number, errors?:Array, message?:string}>}
+ */
+async function syncScrapedEventsToFirestore(events, uploadedList = []) {
+  if (!isFirestoreEnabled()) {
+    return {
+      enabled: false,
+      message:
+        'Firestore aus – setze FIREBASE_SERVICE_ACCOUNT_JSON oder FIREBASE_SERVICE_ACCOUNT_PATH (optional FIRESTORE_COLLECTION).'
+    };
+  }
+  if (!initIfNeeded()) {
+    return { enabled: false, message: 'Firebase konnte nicht initialisiert werden.' };
+  }
+
+  const collectionName = process.env.FIRESTORE_COLLECTION || 'cms';
+  const db = admin.firestore();
+  let written = 0;
+  const errors = [];
+
+  for (const event of events) {
+    const name = event.title || event.eventName;
+    const match = uploadedList.find(
+      (u) => u.eventName === name && (u.date || '') === (event.date || '')
+    );
+    const docId = makeDocId(event);
+    try {
+      await db.collection(collectionName).doc(docId).set(
+        eventToDoc(event, {
+          webflowId: match?.webflowId,
+          webflowAction: match?.action,
+          slug: match?.slug
+        }),
+        { merge: true }
+      );
+      written++;
+    } catch (e) {
+      errors.push({ docId, error: e.message });
+    }
+  }
+
+  return {
+    enabled: true,
+    collection: collectionName,
+    written,
+    errors: errors.length ? errors : undefined
+  };
+}
+
+module.exports = {
+  syncScrapedEventsToFirestore,
+  makeDocId,
+  isFirestoreEnabled
+};
