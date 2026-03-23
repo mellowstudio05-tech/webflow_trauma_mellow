@@ -7,13 +7,16 @@
     "dev": "node index.js",
     "start": "node server.js",
     "deploy": "vercel --prod",
-    "check-fields": "node check-webflow-fields.js"
+    "check-fields": "node check-webflow-fields.js",
+    "list-items": "node list-webflow-items.js"
   },
   "dependencies": {
     "axios": "^1.6.0",
     "cheerio": "^1.0.0-rc.12",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "firebase-admin": "^13.7.0",
+    "form-data": "^4.0.5",
     "node-fetch": "^3.3.2"
   },
   "devDependencies": {
@@ -23,4 +26,3 @@
     "node": ">=18.0.0"
   }
 }
-
