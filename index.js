@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { scrapeContent } = require('./scraper');
 const WebflowAPI = require('./webflow-api');
+const { syncScrapedEventsToFirestore } = require('./firestore-sync');
 
 /**
  * Main function to scrape content and upload to Webflow
@@ -128,6 +129,8 @@ async function main() {
 
         uploadedEvents.push({
           eventName: eventName,
+          date: event.date,
+          slug: slug,
           webflowId: result.id,
           action: action
         });
@@ -151,10 +154,16 @@ async function main() {
       }
     }
 
-    // Summary
     const createdCount = uploadedEvents.filter(e => e.action === 'created').length;
     const updatedCount = uploadedEvents.filter(e => e.action === 'updated').length;
-    
+
+    const firestoreSummary = await syncScrapedEventsToFirestore(scrapedData.events, uploadedEvents);
+    if (firestoreSummary.enabled) {
+      console.log(`\n🔥 Firestore: ${firestoreSummary.written} Dokumente in "${firestoreSummary.collection}"`);
+    } else {
+      console.log(`\n🔥 Firestore: ${firestoreSummary.message}`);
+    }
+
     console.log(`\n✅ Successfully processed ${uploadedEvents.length} events:`);
     console.log(`   📝 Created: ${createdCount} new events`);
     console.log(`   ✏️  Updated: ${updatedCount} existing events`);
