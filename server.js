@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const { scrapeContent } = require('./scraper');
 const WebflowAPI = require('./webflow-api');
+const { syncScrapedEventsToFirestore } = require('./firestore-sync');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -149,6 +150,8 @@ app.get('/api/scrape', async (req, res) => {
 
           uploadedEvents.push({
             eventName: eventName,
+            date: event.date,
+            slug: slug,
             webflowId: result.id,
             action: action
           });
@@ -180,6 +183,8 @@ app.get('/api/scrape', async (req, res) => {
     const createdCount = uploadedEvents.filter(e => e.action === 'created').length;
     const updatedCount = uploadedEvents.filter(e => e.action === 'updated').length;
 
+    const firestoreSummary = await syncScrapedEventsToFirestore(scrapedData.events, uploadedEvents);
+
     res.json({
       success: true,
       message: `Successfully processed ${uploadedEvents.length} events`,
@@ -189,7 +194,8 @@ app.get('/api/scrape', async (req, res) => {
         uploaded: uploadedEvents.length,
         created: createdCount,
         updated: updatedCount
-      }
+      },
+      firestore: firestoreSummary
     });
 
   } catch (error) {
@@ -311,6 +317,8 @@ app.post('/api/scrape', async (req, res) => {
 
           uploadedEvents.push({
             eventName: eventName,
+            date: event.date,
+            slug: slug,
             webflowId: result.id,
             action: action
           });
@@ -342,6 +350,8 @@ app.post('/api/scrape', async (req, res) => {
     const createdCount = uploadedEvents.filter(e => e.action === 'created').length;
     const updatedCount = uploadedEvents.filter(e => e.action === 'updated').length;
 
+    const firestoreSummary = await syncScrapedEventsToFirestore(scrapedData.events, uploadedEvents);
+
     res.json({
       success: true,
       message: `Successfully processed ${uploadedEvents.length} events`,
@@ -351,7 +361,8 @@ app.post('/api/scrape', async (req, res) => {
         uploaded: uploadedEvents.length,
         created: createdCount,
         updated: updatedCount
-      }
+      },
+      firestore: firestoreSummary
     });
 
   } catch (error) {
