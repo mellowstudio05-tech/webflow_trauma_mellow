@@ -9,16 +9,29 @@ const path = require('path');
 
 let initialized = false;
 
+function normalizeJsonString(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  let s = raw.replace(/^\uFEFF/, '').trim();
+  if ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith('"') && s.endsWith('"') && s.indexOf('{') > 0)) {
+    s = s.slice(1, -1).replace(/\\"/g, '"');
+  }
+  return s.trim();
+}
+
+function applyPrivateKeyNewlines(account) {
+  if (account?.private_key && typeof account.private_key === 'string') {
+    account.private_key = account.private_key.replace(/\\n/g, '\n');
+  }
+  return account;
+}
+
 function parseServiceAccount() {
   const filePath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH?.trim();
   if (filePath) {
     try {
       const abs = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
       const raw = fs.readFileSync(abs, 'utf8');
-      const account = JSON.parse(raw);
-      if (account.private_key && typeof account.private_key === 'string') {
-        account.private_key = account.private_key.replace(/\\n/g, '\n');
-      }
+      const account = applyPrivateKeyNewlines(JSON.parse(raw));
       return account;
     } catch (e) {
       console.error('FIREBASE_SERVICE_ACCOUNT_PATH konnte nicht gelesen werden:', e.message);
@@ -26,14 +39,23 @@ function parseServiceAccount() {
     }
   }
 
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (!raw || !raw.trim()) return null;
-  try {
-    const account = JSON.parse(raw.trim());
-    if (account.private_key && typeof account.private_key === 'string') {
-      account.private_key = account.private_key.replace(/\\n/g, '\n');
+  const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64?.trim();
+  if (b64) {
+    try {
+      const decoded = Buffer.from(b64, 'base64').toString('utf8');
+      const account = applyPrivateKeyNewlines(JSON.parse(normalizeJsonString(decoded)));
+      return account;
+    } catch (e) {
+      console.error('FIREBASE_SERVICE_ACCOUNT_BASE64 konnte nicht dekodiert/gelesen werden:', e.message);
+      return null;
     }
-    return account;
+  }
+
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (!raw || !String(raw).trim()) return null;
+  const normalized = normalizeJsonString(String(raw));
+  try {
+    return applyPrivateKeyNewlines(JSON.parse(normalized));
   } catch (e) {
     console.error('FIREBASE_SERVICE_ACCOUNT_JSON ist kein gültiges JSON:', e.message);
     return null;
@@ -58,8 +80,21 @@ function initIfNeeded() {
 function isFirestoreEnabled() {
   return !!(
     process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim() ||
+    process.env.FIREBASE_SERVICE_ACCOUNT_BASE64?.trim() ||
     process.env.FIREBASE_SERVICE_ACCOUNT_PATH?.trim()
   );
+}
+
+/** Für API-Antwort: ohne Geheimnisse preiszugeben */
+function firestoreEnvHint() {
+  const j = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  const b = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
+  const p = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+  return {
+    jsonVariableLength: j ? String(j).length : 0,
+    base64VariableLength: b ? String(b).length : 0,
+    pathSet: !!(p && p.trim())
+  };
 }
 
 function fullImageUrl(imageUrl) {
@@ -123,11 +158,17 @@ async function syncScrapedEventsToFirestore(events, uploadedList = []) {
     return {
       enabled: false,
       message:
-        'Firestore aus – setze FIREBASE_SERVICE_ACCOUNT_JSON oder FIREBASE_SERVICE_ACCOUNT_PATH (optional FIRESTORE_COLLECTION).'
+        'Firestore aus – in Vercel: FIREBASE_SERVICE_ACCOUNT_JSON (Inhalt der JSON) oder FIREBASE_SERVICE_ACCOUNT_BASE64 setzen, Environment „Production“ anhaken, danach Redeploy.',
+      envHint: firestoreEnvHint()
     };
   }
   if (!initIfNeeded()) {
-    return { enabled: false, message: 'Firebase konnte nicht initialisiert werden.' };
+    return {
+      enabled: false,
+      message:
+        'Firebase-Variable ist gesetzt, aber ungültig oder Init fehlgeschlagen. JSON prüfen oder FIREBASE_SERVICE_ACCOUNT_BASE64 nutzen (siehe FIRESTORE_SETUP.md).',
+      envHint: firestoreEnvHint()
+    };
   }
 
   const collectionName = process.env.FIRESTORE_COLLECTION || 'cms';
@@ -167,5 +208,6 @@ async function syncScrapedEventsToFirestore(events, uploadedList = []) {
 module.exports = {
   syncScrapedEventsToFirestore,
   makeDocId,
-  isFirestoreEnabled
+  isFirestoreEnabled,
+  firestoreEnvHint
 };
