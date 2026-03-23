@@ -72,7 +72,7 @@ Andere Namen gehen auch, wenn du die Variable setzt (überschreibt den Standard)
 
 - **Gleiche Doc-ID = Update:** Existiert bereits ein Dokument mit derselben ID (Name + Datum), werden die Felder **aktualisiert** (`merge`), kein Duplikat. In der API-Antwort siehst du `firestore.created` / `firestore.updated`.
 - **Doc-ID:** aus Eventname + Tabellen-Datum (z. B. `widersetzen-soli-party-06-03-26`)  
-- **Felder u. a.:** `cmsTopId` (fest **`vh060ZY8Hm63yohFiYFB`**, änderbar mit Env **`CMS_TOP_ID`**), `eventName`, `dateTable`, `time`, `location`, `category`, `detailUrl`, `description`, `imageUrl`, `price`, `webflowId`, `webflowAction`, `slug`, `scrapedAt`, `source`, `updatedAt`
+- **Felder u. a.:** `cmsTopId` (fest **`QJVcM2zsrnkowCTz4E97`**, änderbar mit Env **`CMS_TOP_ID`**), `eventName`, `dateTable`, `time`, `location`, `category`, `detailUrl`, `description`, `imageUrl`, `price`, `webflowId`, `webflowAction`, `slug`, `scrapedAt`, `source`, `updatedAt`
 
 Ohne `FIREBASE_SERVICE_ACCOUNT_JSON` läuft der Scraper wie bisher nur mit Webflow; Firestore wird übersprungen (in der API-Antwort: `firestore.enabled: false`).
 
