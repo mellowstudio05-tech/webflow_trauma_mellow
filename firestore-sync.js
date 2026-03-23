@@ -121,7 +121,7 @@ function makeDocId(event) {
   return id;
 }
 
-const DEFAULT_CMS_TOP_ID = 'vh060ZY8Hm63yohFiYFB';
+const DEFAULT_CMS_TOP_ID = 'QJVcM2zsrnkowCTz4E97';
 
 function eventToDoc(event, extras = {}) {
   const cmsTopId = (process.env.CMS_TOP_ID || DEFAULT_CMS_TOP_ID).trim();
