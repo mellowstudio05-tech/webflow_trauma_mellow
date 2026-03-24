@@ -161,8 +161,10 @@ async function scrapeEventDetails(detailUrl) {
       // Veranstaltungsbeginn
       startTime: $('.event-single-view-time p').text().trim(),
       
-      // Kategorie
-      category: $('.event-single-view-category').text().replace('Kategorie:', '').trim(),
+      // Kategorie (Detailseite: meist im <dd>, Fallback auf bisherigen Bereich)
+      category: $('dt:contains("Kategorie")').next('dd').first().text().replace(/\s+/g, ' ').trim()
+        || $('.event-single-view-category').text().replace('Kategorie:', '').replace(/\s+/g, ' ').trim()
+        || $('dd').filter((_, el) => $(el).text().toLowerCase().includes('kino') || $(el).text().toLowerCase().includes('konzert') || $(el).text().toLowerCase().includes('party')).first().text().replace(/\s+/g, ' ').trim(),
       
       // Ort mit vollständiger Adresse
       fullLocation: $('.event-single-view-contact .col:last-child p').html(),
@@ -175,8 +177,10 @@ async function scrapeEventDetails(detailUrl) {
         || $('.event-detail-images img').attr('alt')
         || $('.single-event-image img').attr('alt'),
       
-      // Beschreibung (für Blog Rich Text)
-      description: $('.event-single-view-desc').text().trim(),
+      // Beschreibung (Paragraph auf Detailseite)
+      description: $('div[itemprop="description"] p').text().replace(/\s+/g, ' ').trim()
+        || $('div[itemprop="description"]').text().replace(/\s+/g, ' ').trim()
+        || $('.event-single-view-desc').text().replace(/\s+/g, ' ').trim(),
       
       // Eintrittspreis
       price: $('.event-single-view-fee p').text().trim(),
